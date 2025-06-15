@@ -1,11 +1,17 @@
 .PHONY: build #unittest
 
+libraries=$(libjson) $(libcurl)
+includes=$(foreach lib,$(libraries),-I $(lib)/include -L$(lib)/lib)
+
 build: request.out
 
-#unittest:
-#	$(MAKE) -C unittest
+unittest:
+	$(MAKE) -C unittest
 
-request.out: main.c discord.c
-	gcc $(flags) -lcurl discord.c main.c -o request.out
+request.out: main.c communication.o communication.h
+	gcc $(includes) -lcurl -lpthread main.c communication.c -o request.out
+
+communication.o: communication.c communication.h
+	gcc -I $(libcurl)/include -c communication.c
 
 all: build unittest
