@@ -11,11 +11,12 @@
       pkgs = import nixpkgs {system="x86_64-linux";};
       curllib = import libcurl {nixpkgs=pkgs;};
     in pkgs.stdenv.mkDerivation {
-      buildInputs=with pkgs; [openssl wget cjson];
+      buildInputs=with pkgs; [openssl wget cjson ncurses];
       name="oceanbot";
       src=./src;
       buildPhase=''
         export cjson=${pkgs.cjson}
+        export ncurses=${pkgs.ncurses}
         export libcurl=${curllib}
         make
       '';

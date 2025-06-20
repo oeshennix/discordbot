@@ -11,6 +11,7 @@ struct discordgateway{
   char* Token;
   double Intents;
   void *userdata;
+  double sequence;
 };
 
 struct discordgateway newdiscordgateway();

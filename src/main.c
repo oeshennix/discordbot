@@ -29,7 +29,7 @@ void* gatewayhandler(void* args){
   struct discordgateway gateway=gateway_easy_init(NULL);
   char *discordtoken=getenv("DISCORDTOKEN");
   gateway.Token=discordtoken;
-  gateway.Intents=(double)(1<<9);
+  gateway.Intents=(double)(1<<10 | 1<<9 | 1<<0 );
   int err=gateway_start(&gateway, "wss://gateway.discord.gg/?v=10&encoding=json");
 }
 
@@ -41,12 +41,10 @@ int main(void){
   const char *discordwebhookurl=getenv("WEBHOOKURL");
   const char *jsondata=getenv("WEBHOOKDATA");
   pthread_t gatewaythread;
+
   pthread_create(&gatewaythread,NULL,gatewayhandler,NULL);
 
-  
   discordsetupcommunications(discordwebhookurl);
-
-  discordsendrawmessage(jsondata);
 
   discordcleanupcommunications();
   curl_global_cleanup();
