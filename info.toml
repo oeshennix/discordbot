@@ -1,0 +1,4 @@
+RetrieveBotInfoDuring="runtime";
+#runtime, build
+RetrieveBotInfoFrom="env"
+#env

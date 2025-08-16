@@ -6,18 +6,23 @@
     libcurl.url = ./libcurl;
   };
 
-  outputs = { self, nixpkgs, libcurl}: {
+  outputs = { self, nixpkgs, libcurl}:
+    let
+      tomlinfo = builtins.fromTOML(builtins.readFile ./info.toml);
+    in
+  {
     packages.x86_64-linux.default = let
       pkgs = import nixpkgs {system="x86_64-linux";};
       curllib = import libcurl {nixpkgs=pkgs;};
     in pkgs.stdenv.mkDerivation {
+      cjson=pkgs.cjson;
+      #ncurses=pkgs.ncurses;
+      libcurl=curllib;
+
       buildInputs=with pkgs; [openssl wget cjson ncurses];
       name="oceanbot";
       src=./src;
       buildPhase=''
-        export cjson=${pkgs.cjson}
-        export ncurses=${pkgs.ncurses}
-        export libcurl=${curllib}
         make
       '';
       installPhase=''
@@ -26,27 +31,6 @@
         mv cacert.pem $out
         #mv .env.sh $out
       '';
-    };
-    devShells.x86_64-linux.default = let
-      pkgs = import nixpkgs {system="x86_64-linux";};
-      curllib = import libcurl {nixpkgs=pkgs;};
-    in pkgs.stdenv.mkDerivation {
-      buildInputs=with pkgs; [openssl wget cjson];
-      name="oceanbot";
-      src=./src;
-      buildPhase=''
-        export cjson=${pkgs.cjson}
-        export libcurl=${curllib}
-        make
-      '';
-      installPhase=''
-        mkdir $out
-        #cp -r build $out
-        mv request.out $out
-        mv cacert.pem $out
-        mv .env.sh $out
-      '';
-
     };
   };
 }

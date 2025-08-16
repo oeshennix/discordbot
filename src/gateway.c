@@ -5,13 +5,10 @@
 #include <unistd.h>
 #include "gateway.h"
 #include <ncursesw/ncurses.h>
+
+#include "gateway_events.c"
 #ifndef NO_GATEWAY_EASY_INIT
 #include <pthread.h>
-#if GATEWAY_ENCODING 
-#include <cjson/cJSON.h>
-#elif
-#error "ETF encoding is not supported";
-#endif
 #endif
 
 struct discordgateway newgateway(){
@@ -37,13 +34,10 @@ int gateway_start(struct discordgateway *gateway,char *url){
   return 1;
 }
 #ifndef NO_GATEWAY_EASY_INIT
-static struct gateway_easy_attributes{
+struct gateway_easy_attributes{
   void(*dispatch)();
-  void(*ready)();
-}
-static void gateway_easy_handle_payload(void *payloadbuffer,size_t payload_size){
-  return;
-}
+  void *ready;
+};
 
 static char *gateway_recieve(struct discordgateway *gateway){
   CURLcode res = CURLE_OK;
@@ -195,7 +189,7 @@ static void gateway_easy_handle_establishing(struct discordgateway *gateway){
   pthread_detach(heartbeat_deferred);
 
   payload_recv=gateway_recieve(gateway);
-  printf("ack%sack",ACK);
+  printf("ack%sack",payload_recv);
   free(payload_recv);
 
   printf("%s\n\n",jsonidentify);
@@ -211,22 +205,30 @@ static void gateway_easy_handle_establishing(struct discordgateway *gateway){
     payload_recv=gateway_recieve(gateway);
     cJSON *jsonpayload=cJSON_Parse(payload_recv);
     if(jsonpayload==NULL){
-      fputs(stderr,"Could not parse payload received");
+      fputs("Could not parse payload received",stderr);
       break;
     }
-    long op = (long)cJSON_GetObjectItemCaseSensitive(jsonpayload,"op");
-    struct gateway_easy_attributes attr=(struct gateway_easy_attributes)gateway->userdata;
+
+    cJSON* pp=cJSON_GetObjectItemCaseSensitive(jsonpayload,"op");
+    long op =(long)cJSON_GetNumberValue(pp);
+    struct gateway_easy_attributes *attr=((struct gateway_easy_attributes*)gateway->userdata);
+
+    printf("%d dispatching",op);
     switch(op){
       case(0)://Dispatch
-        if(gateway_easy_attributes.dispatch)
-          gateway_easy_attributes.dispatch(jsonpayload);
+        if(attr->dispatch){
+          struct gateway_payload *gateway_payload = malloc(sizeof(struct gateway_payload));
+          gateway_payload->discordgateway=gateway;
+          gateway_payload->payload=cJSON_Duplicate(jsonpayload,1);
+          attr->dispatch(gateway_payload);
+        }
         break;
       case(1)://HeartBeat
         break;
       case(11)://HearbeatACK
         break;
       default:
-        fputs("opcode not recognized");
+        puts("opcode not recognized");
         break;
     }
 
@@ -236,23 +238,69 @@ static void gateway_easy_handle_establishing(struct discordgateway *gateway){
   printf("HOW!!!");
   return;
 }
-
-struct discordgateway gateway_easy_init(void (*dispatchfunction)(),void (*readyfunction)()){
-  if(gatewayfunction==NULL){
-    return NULL;
+static void dispatch(struct gateway_payload* gateway_payload){
+  printf("pppppppppppppppppppppp\n");
+  cJSON *jsonpayload=gateway_payload->payload;
+  cJSON* cjsonobject;
+  cjsonobject=cJSON_GetObjectItemCaseSensitive(jsonpayload,"t");
+  if(!cjsonobject){
+    fputs("Invalid payload received",stderr);
+    return;
   }
-  struct discordgateway newgateway;
-  newgateway.curl = curl_easy_init();
-  struct gateway_easy_attributes attr;
-  attr.dispatch=dispatch;
-  attr.ready=readyfunction;
-  newgateway.userdata=gatewayfunction;
+  char* Event_Name=cJSON_GetStringValue(cjsonobject);
+  //binary search
+  int max=sizeof(GatewayEventsSorted)/sizeof(char*);
+  int low=0;
+  int pos=max/2;
+  printf("%s\n",Event_Name);
+  for(int i=0;i<GATEWAYEVENTBINMAX;i++){
+    printf("%d,%d,%d, %s\n",low,pos,max,GatewayEventsSorted[pos]);
+    int lexigraphorder=strcmp(Event_Name,GatewayEventsSorted[pos]);
+    if(lexigraphorder<0){
+      max=pos;
+      pos=(low+max)/2;
+    }else if(lexigraphorder>0){
+      low=pos;
+      pos=(low+max)/2;
+    }else{
+      struct gateway_easy_attributes *easy_attributes=gateway_payload->discordgateway->userdata;
+      void(**gatewayfunction)(struct gateway_payload*)=easy_attributes->ready;
+      printf("%p",gatewayfunction[pos]);
+      fflush(stdout);
+      if(gatewayfunction[pos]!=NULL){
+        gatewayfunction[pos](gateway_payload);
+      }
+      return;
+    }
+  }
+  fprintf(stderr,"Gateway Event \"%s\"",Event_Name);
+  return;
+}
+
+struct discordgateway* gateway_easy_init(void (*dispatchfunction)(),void *readyfunction){
+  if(dispatchfunction==NULL){
+    if(readyfunction==NULL){
+      fprintf(stderr,"readyfunction must be void(function)(struct gateway_payload*)* if dispatchfunction is NULL\n");
+      return NULL;
+    }
+    dispatchfunction=dispatch;
+  }
+  struct discordgateway *newgateway=malloc(sizeof(struct discordgateway));
+  newgateway->curl = curl_easy_init();
+  struct gateway_easy_attributes *attr =malloc(sizeof(struct gateway_easy_attributes));
+  attr->dispatch=dispatchfunction;
+  attr->ready=readyfunction;
+  newgateway->userdata=attr;
   //curl_easy_setopt(newgateway.curl, CURLOPT_SSL_VERIFYSTATUS,1L);
-  curl_easy_setopt(newgateway.curl, CURLOPT_CAINFO,"./cacert.pem");
-  curl_easy_setopt(newgateway.curl, CURLOPT_CAPATH,"./cacert.pem");
+  curl_easy_setopt(newgateway->curl, CURLOPT_CAINFO,"./cacert.pem");
+  curl_easy_setopt(newgateway->curl, CURLOPT_CAPATH,"./cacert.pem");
   //curl_easy_setopt(newgateway.curl, CURLOPT_WS_OPTIONS,CURLWS_NOAUTOPONG);
 
-  newgateway.gatewayfunction=gateway_easy_handle_establishing;
+  newgateway->gatewayfunction=gateway_easy_handle_establishing;
   return newgateway;
+}
+void gateway_easy_cleanup(struct discordgateway *discordgateway){
+  free(discordgateway->userdata);
+  free(discordgateway);
 }
 #endif
