@@ -72,7 +72,7 @@ static void dispatch(struct gateway_payload* gateway_payload){
   fputs("id",stdout);
   fflush(stdout);
   char* Author_id=cJSON_GetStringValue(cjsonobject);
-  if(strcmp(Author_id,"BOT_ID")==0)
+  if(strcmp(Author_id,BotUserId)==0)
     return;
 
 
